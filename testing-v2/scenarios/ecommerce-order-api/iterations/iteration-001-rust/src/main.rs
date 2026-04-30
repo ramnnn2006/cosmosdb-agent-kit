@@ -16,12 +16,11 @@ async fn main() {
         "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==".to_string()
     });
 
-    let cosmos = Arc::new(cosmos::CosmosClient::new(
-        &endpoint,
-        &key,
-        "ecommerce-order-api",
-        "orders",
-    ));
+    let cosmos = Arc::new(
+        cosmos::CosmosDb::new(&endpoint, &key, "ecommerce-order-api", "orders")
+            .await
+            .expect("Failed to create Cosmos DB client"),
+    );
 
     // Initialize database/container in background so health responds immediately
     let cosmos_init = cosmos.clone();

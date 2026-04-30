@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query as AxumQuery, State},
     http::StatusCode,
     Json,
 };
+use azure_data_cosmos::Query;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -86,12 +87,12 @@ pub async fn get_order(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // We don't know the partition key (customerId) for an orderId lookup,
     // so query across partitions.
+    let query = Query::from("SELECT * FROM c WHERE c.orderId = @orderId")
+        .with_parameter("@orderId", &order_id)
+        .unwrap();
+
     let orders = cosmos
-        .query_documents(
-            "SELECT * FROM c WHERE c.orderId = @orderId",
-            vec![json!({ "name": "@orderId", "value": order_id })],
-            None,
-        )
+        .query_documents(query, None)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?;
 
@@ -114,26 +115,25 @@ pub struct ListOrdersQuery {
 
 pub async fn list_orders(
     State(cosmos): State<SharedCosmos>,
-    Query(params): Query<ListOrdersQuery>,
+    AxumQuery(params): AxumQuery<ListOrdersQuery>,
 ) -> Result<Json<Vec<Value>>, (StatusCode, Json<Value>)> {
-    let mut query = "SELECT * FROM c WHERE 1=1".to_string();
-    let mut parameters: Vec<Value> = Vec::new();
+    let mut query = Query::from("SELECT * FROM c WHERE 1=1");
 
     if let Some(ref status) = params.status {
-        query.push_str(" AND c.status = @status");
-        parameters.push(json!({ "name": "@status", "value": status }));
+        query = query.append_text(" AND c.status = @status");
+        query = query.with_parameter("@status", status).unwrap();
     }
     if let Some(ref start_date) = params.start_date {
-        query.push_str(" AND c.createdAt >= @startDate");
-        parameters.push(json!({ "name": "@startDate", "value": start_date }));
+        query = query.append_text(" AND c.createdAt >= @startDate");
+        query = query.with_parameter("@startDate", start_date).unwrap();
     }
     if let Some(ref end_date) = params.end_date {
-        query.push_str(" AND c.createdAt <= @endDate");
-        parameters.push(json!({ "name": "@endDate", "value": end_date }));
+        query = query.append_text(" AND c.createdAt <= @endDate");
+        query = query.with_parameter("@endDate", end_date).unwrap();
     }
 
     let orders = cosmos
-        .query_documents(&query, parameters, None)
+        .query_documents(query, None)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?;
 
@@ -148,12 +148,12 @@ pub async fn get_customer_orders(
     Path(customer_id): Path<String>,
 ) -> Result<Json<Vec<Value>>, (StatusCode, Json<Value>)> {
     // Partition-scoped query — efficient single-partition read
+    let query = Query::from("SELECT * FROM c WHERE c.customerId = @customerId")
+        .with_parameter("@customerId", &customer_id)
+        .unwrap();
+
     let orders = cosmos
-        .query_documents(
-            "SELECT * FROM c WHERE c.customerId = @customerId",
-            vec![json!({ "name": "@customerId", "value": customer_id })],
-            Some(&customer_id),
-        )
+        .query_documents(query, Some(&customer_id))
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?;
 
@@ -168,24 +168,21 @@ pub async fn get_customer_summary(
     Path(customer_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Single aggregate query scoped to the customer partition
-    let result = cosmos
-        .query_aggregate(
-            "SELECT COUNT(1) AS totalOrders, SUM(c.total) AS totalSpent FROM c WHERE c.customerId = @cid",
-            vec![json!({ "name": "@cid", "value": customer_id })],
-            Some(&customer_id),
-        )
+    let query = Query::from(
+        "SELECT COUNT(1) AS totalOrders, SUM(c.total) AS totalSpent FROM c WHERE c.customerId = @cid",
+    )
+    .with_parameter("@cid", &customer_id)
+    .unwrap();
+
+    let results = cosmos
+        .query_raw(query, Some(&customer_id))
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?;
 
-    let docs = result.get("Documents").and_then(|v| v.as_array());
-    let (total_orders, total_spent) = if let Some(arr) = docs {
-        if let Some(doc) = arr.first() {
-            let orders = doc.get("totalOrders").and_then(|v| v.as_i64()).unwrap_or(0);
-            let spent = doc.get("totalSpent").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            (orders, spent)
-        } else {
-            (0, 0.0)
-        }
+    let (total_orders, total_spent) = if let Some(doc) = results.first() {
+        let orders = doc.get("totalOrders").and_then(|v| v.as_i64()).unwrap_or(0);
+        let spent = doc.get("totalSpent").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        (orders, spent)
     } else {
         (0, 0.0)
     };
@@ -217,12 +214,12 @@ pub async fn update_order_status(
     };
 
     // Look up the order (cross-partition since we only have orderId)
+    let query = Query::from("SELECT * FROM c WHERE c.orderId = @orderId")
+        .with_parameter("@orderId", &order_id)
+        .unwrap();
+
     let orders = cosmos
-        .query_documents(
-            "SELECT * FROM c WHERE c.orderId = @orderId",
-            vec![json!({ "name": "@orderId", "value": order_id })],
-            None,
-        )
+        .query_documents(query, None)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?;
 
@@ -258,12 +255,12 @@ pub async fn delete_order(
     Path(order_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, Json<Value>)> {
     // Look up order first
+    let query = Query::from("SELECT * FROM c WHERE c.orderId = @orderId")
+        .with_parameter("@orderId", &order_id)
+        .unwrap();
+
     let orders = cosmos
-        .query_documents(
-            "SELECT * FROM c WHERE c.orderId = @orderId",
-            vec![json!({ "name": "@orderId", "value": order_id })],
-            None,
-        )
+        .query_documents(query, None)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?;
 
