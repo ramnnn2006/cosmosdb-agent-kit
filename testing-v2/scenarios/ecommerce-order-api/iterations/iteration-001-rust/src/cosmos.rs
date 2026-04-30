@@ -1,6 +1,6 @@
 use azure_core::http::StatusCode;
 use azure_data_cosmos::{
-    models::{ContainerProperties, PartitionKeyDefinition},
+    models::{ContainerProperties, IndexingPolicy, PartitionKeyDefinition},
     CosmosAccountEndpoint, CosmosAccountReference, CosmosClient, CosmosClientBuilder,
     ItemOptions, PartitionKey, Query,
 };
@@ -51,12 +51,33 @@ impl CosmosDb {
             Err(e) => return Err(format!("create database failed: {}", e)),
         }
 
-        // Create container with /customerId partition key
+        // Create container with /customerId partition key and composite indexes
         let db_client = self.client.database_client(&self.database);
+
+        // Build indexing policy with composite indexes via JSON deserialization
+        // (CompositeIndex/CompositeIndexProperty are #[non_exhaustive])
+        let indexing_policy: IndexingPolicy = serde_json::from_value(serde_json::json!({
+            "automatic": true,
+            "indexingMode": "consistent",
+            "includedPaths": [{"path": "/*"}],
+            "excludedPaths": [{"path": "/_etag/?"}],
+            "compositeIndexes": [
+                [
+                    {"path": "/status", "order": "ascending"},
+                    {"path": "/createdAt", "order": "descending"}
+                ],
+                [
+                    {"path": "/customerId", "order": "ascending"},
+                    {"path": "/createdAt", "order": "descending"}
+                ]
+            ]
+        })).expect("valid indexing policy JSON");
+
         let properties = ContainerProperties::new(
             self.container.clone(),
             PartitionKeyDefinition::new(vec!["/customerId".to_string()]),
-        );
+        )
+        .with_indexing_policy(indexing_policy);
 
         match db_client.create_container(properties, None).await {
             Ok(_) => {}

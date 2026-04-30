@@ -9,15 +9,10 @@ This is the high-level log. For detailed per-iteration evaluation notes (test re
 
 ---
 
-## 2026-04-30 — iteration-001-rust automated evaluation (skills)
+## 2026-04-30 — ecommerce-order-api iteration-001-rust evaluation ([#274](https://github.com/TheovanKraay/cosmosdb-agent-kit/pull/274))
 
-- **Scenario**: ecommerce-order-api, **Language**: rust
-- **Result**: 85/91 tests passed (93.4%), score 8/10
-
-## 2026-04-30 — iteration-001-rust automated evaluation (skills)
-
-- **Scenario**: ecommerce-order-api, **Language**: rust
-- **Result**: 85/91 tests passed (93.4%), score 8/10
+- Fixed 5 test failures: added `pending → delivered` transition, composite indexes, type discriminator, schema version fields.
+- No new rules needed — existing rules covered the gaps; code simply didn't apply them initially.
 
 ## 2026-04-18 — README updated to document testing framework
 

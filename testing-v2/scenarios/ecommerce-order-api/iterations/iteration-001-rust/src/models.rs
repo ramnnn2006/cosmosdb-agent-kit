@@ -28,6 +28,20 @@ pub struct Order {
     pub created_at: String,
     #[serde(rename = "shippingAddress", skip_serializing_if = "Option::is_none")]
     pub shipping_address: Option<String>,
+    /// Type discriminator for multi-entity containers / future extensibility
+    #[serde(rename = "type", default = "default_type")]
+    pub doc_type: String,
+    /// Schema version for document evolution
+    #[serde(rename = "schemaVersion", default = "default_schema_version")]
+    pub schema_version: String,
+}
+
+fn default_type() -> String {
+    "order".to_string()
+}
+
+fn default_schema_version() -> String {
+    "1".to_string()
 }
 
 /// Request body for creating an order.

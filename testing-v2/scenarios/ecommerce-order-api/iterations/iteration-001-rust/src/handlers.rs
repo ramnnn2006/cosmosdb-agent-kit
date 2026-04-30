@@ -69,6 +69,8 @@ pub async fn create_order(
         status: "pending".to_string(),
         created_at,
         shipping_address: body.shipping_address.clone(),
+        doc_type: "order".to_string(),
+        schema_version: "1".to_string(),
     };
 
     cosmos.create_document(&order).await.map_err(|e| {
@@ -231,7 +233,7 @@ pub async fn update_order_status(
     // Validate transition
     let valid = matches!(
         (order.status.as_str(), new_status.as_str()),
-        ("pending", "shipped") | ("pending", "cancelled") | ("shipped", "delivered")
+        ("pending", "shipped") | ("pending", "cancelled") | ("pending", "delivered") | ("shipped", "delivered")
     );
     if !valid {
         return Err((
