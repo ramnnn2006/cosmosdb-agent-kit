@@ -160,7 +160,11 @@ Reference these guidelines when:
 - [pattern-service-layer-relationships](rules/pattern-service-layer-relationships.md) - Use a service layer to hydrate document references
 - [pattern-langgraph-multi-agent](rules/pattern-langgraph-multi-agent.md) - Use StateGraph with conditional edges for multi-agent routing
 - [pattern-langgraph-interrupt-human](rules/pattern-langgraph-interrupt-human.md) - Use LangGraph interrupt for human-in-the-loop confirmation flows
+- [pattern-langgraph-resume-checkpoint](rules/pattern-langgraph-resume-checkpoint.md) - Resume LangGraph from checkpoint after interrupt for multi-turn conversations
 - [pattern-agent-routing-cosmosdb](rules/pattern-agent-routing-cosmosdb.md) - Persist active agent in Cosmos DB for deterministic routing via point reads
+- [pattern-fastapi-agent-startup](rules/pattern-fastapi-agent-startup.md) - Initialize LangGraph agents in FastAPI startup with retry logic
+- [pattern-chat-history-separate](rules/pattern-chat-history-separate.md) - Store chat history in a dedicated container, not the checkpointer
+- [pattern-background-task-writes](rules/pattern-background-task-writes.md) - Use FastAPI background tasks for non-blocking chat history writes
 
 ### 10. Developer Tooling (MEDIUM)
 

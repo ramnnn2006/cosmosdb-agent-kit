@@ -110,11 +110,15 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
 9. [Design Patterns](#9-design-patterns) — **HIGH**
    - 9.1 [Persist Active Agent in Cosmos DB for Deterministic Routing](#91-persist-active-agent-in-cosmos-db-for-deterministic-routing)
    - 9.2 [Use Point Reads for AI-Grounding and RAG Retrieval When ID Is Known](#92-use-point-reads-for-ai-grounding-and-rag-retrieval-when-id-is-known)
-   - 9.3 [Use Change Feed for cross-partition query optimization with materialized views](#93-use-change-feed-for-cross-partition-query-optimization-with-materialized-views)
-   - 9.4 [Use count-based or cached rank approaches instead of full partition scans for ranking](#94-use-count-based-or-cached-rank-approaches-instead-of-full-partition-scans-for-ranking)
-   - 9.5 [Use LangGraph Interrupt for Human-in-the-Loop Confirmation](#95-use-langgraph-interrupt-for-human-in-the-loop-confirmation)
-   - 9.6 [Use StateGraph with Conditional Edges for Multi-Agent Routing](#96-use-stategraph-with-conditional-edges-for-multi-agent-routing)
-   - 9.7 [Use a service layer to hydrate document references before rendering](#97-use-a-service-layer-to-hydrate-document-references-before-rendering)
+   - 9.3 [Use Background Tasks for Non-Blocking Chat History Storage](#93-use-background-tasks-for-non-blocking-chat-history-storage)
+   - 9.4 [Use Change Feed for cross-partition query optimization with materialized views](#94-use-change-feed-for-cross-partition-query-optimization-with-materialized-views)
+   - 9.5 [Store Chat History Separately from LangGraph Checkpoints](#95-store-chat-history-separately-from-langgraph-checkpoints)
+   - 9.6 [Use count-based or cached rank approaches instead of full partition scans for ranking](#96-use-count-based-or-cached-rank-approaches-instead-of-full-partition-scans-for-ranking)
+   - 9.7 [Initialize LangGraph Agents in FastAPI Startup with Retry](#97-initialize-langgraph-agents-in-fastapi-startup-with-retry)
+   - 9.8 [Use LangGraph Interrupt for Human-in-the-Loop Confirmation](#98-use-langgraph-interrupt-for-human-in-the-loop-confirmation)
+   - 9.9 [Use StateGraph with Conditional Edges for Multi-Agent Routing](#99-use-stategraph-with-conditional-edges-for-multi-agent-routing)
+   - 9.10 [Resume LangGraph from Checkpoint After Interrupt](#910-resume-langgraph-from-checkpoint-after-interrupt)
+   - 9.11 [Use a service layer to hydrate document references before rendering](#911-use-a-service-layer-to-hydrate-document-references-before-rendering)
 10. [Developer Tooling](#10-developer-tooling) — **MEDIUM**
    - 10.1 [Use Azure Cosmos DB Emulator for local development and testing](#101-use-azure-cosmos-db-emulator-for-local-development-and-testing)
    - 10.2 [Use Azure Cosmos DB VS Code extension for routine inspection and management](#102-use-azure-cosmos-db-vs-code-extension-for-routine-inspection-and-management)
@@ -9704,7 +9708,73 @@ See also: `query-point-reads` (general point-read guidance), `query-use-projecti
 
 Reference: [Request Units — point reads cost fewer RUs than queries](https://learn.microsoft.com/azure/cosmos-db/request-units#request-unit-considerations)
 
-### 9.3 Use Change Feed for cross-partition query optimization with materialized views
+### 9.3 Use Background Tasks for Non-Blocking Chat History Storage
+
+**Impact: MEDIUM** (reduces API response latency by 50-200ms per request)
+
+## Use Background Tasks for Non-Blocking Chat History Storage
+
+**Impact: MEDIUM (reduces API response latency by 50-200ms per request)**
+
+After a LangGraph agent produces a response, storing chat history and debug logs in Cosmos DB is important for the UI but not for the immediate API response. Use FastAPI's `BackgroundTasks` to defer these writes, returning the agent response to the user immediately. This avoids adding Cosmos DB write latency (typically 5-20ms per write, more with multiple writes) to the user-facing response time.
+
+**Incorrect (blocking writes before returning response):**
+
+```python
+from fastapi import FastAPI
+
+@app.post("/chat/{session_id}")
+async def chat(session_id: str, user_message: str):
+    response = await graph.ainvoke(state, config, stream_mode="updates")
+    messages = extract_response(response)
+
+    # BAD: User waits for all these DB writes to complete before seeing the response
+    for msg in messages:
+        store_chat_history(msg)  # 5-20ms each
+    store_debug_log(session_id, response)  # Another 10-20ms
+    update_active_agent(session_id, last_agent)  # Another 5-10ms
+
+    return messages  # User waited an extra 50-200ms unnecessarily
+```
+
+**Correct (defer writes with BackgroundTasks):**
+
+```python
+from fastapi import FastAPI, BackgroundTasks
+
+def process_post_response(messages, session_id, tenant_id, user_id, active_agent):
+    """Runs after the response is sent to the client."""
+    for msg in messages:
+        store_chat_history(msg)
+    update_active_agent_in_latest_message(session_id, active_agent)
+
+@app.post("/chat/{session_id}")
+async def chat(
+    session_id: str,
+    user_message: str,
+    background_tasks: BackgroundTasks
+):
+    response = await graph.ainvoke(state, config, stream_mode="updates")
+    messages = extract_response(response)
+
+    # Schedule writes to run after the response is sent
+    background_tasks.add_task(
+        process_post_response, messages, session_id, tenant_id, user_id, active_agent
+    )
+
+    # Response returned immediately — user sees it while writes happen in background
+    return messages
+```
+
+**When to use background tasks vs. blocking:**
+- **Background:** Chat history storage, debug log writes, session name updates, analytics
+- **Blocking:** Active agent patch (if needed for the *current* response routing), session creation, critical state that the next request depends on
+
+**Note:** Background tasks in FastAPI run in the same process after the response. For truly fire-and-forget workloads at scale, consider Azure Cosmos DB change feed triggers or message queues.
+
+Reference: [FastAPI Background Tasks](https://fastapi.tiangolo.com/tutorial/background-tasks/)
+
+### 9.4 Use Change Feed for cross-partition query optimization with materialized views
 
 **Impact: HIGH** (eliminates cross-partition query overhead for admin/analytics scenarios)
 
@@ -9997,7 +10067,75 @@ Reference(s):
 [Change feed design patterns in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/change-feed-design-patterns)
 [Global Secondary Indexes (GSI) in Azure Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/global-secondary-indexes)
 
-### 9.4 Use count-based or cached rank approaches instead of full partition scans for ranking
+### 9.5 Store Chat History Separately from LangGraph Checkpoints
+
+**Impact: MEDIUM** (enables efficient message retrieval and agent attribution)
+
+## Store Chat History Separately from LangGraph Checkpoints
+
+**Impact: MEDIUM (enables efficient message retrieval and agent attribution)**
+
+LangGraph's checkpointer (CosmosDBSaver) stores full graph state for resumption, but it is not optimized for retrieving displayable chat history. Checkpoint data contains internal graph metadata, tool messages, system messages, and duplicate entries from each node execution. Instead, maintain a separate Cosmos DB container for chat history with only the fields your UI needs (sender, text, timestamp, which agent responded). This enables efficient queries, proper agent attribution, and avoids scanning checkpoint blobs.
+
+**Incorrect (reading chat history from the checkpointer store):**
+
+```python
+@app.get("/sessions/{session_id}/messages")
+async def get_messages(session_id: str):
+    config = {"configurable": {"thread_id": session_id, "checkpoint_ns": ""}}
+    # BAD: Checkpointer stores ALL graph state — tool messages, system messages,
+    # intermediate states, duplicates from each node. Expensive to scan and filter.
+    checkpoints = [cp async for cp in checkpointer.alist(config)]
+    if not checkpoints:
+        return []
+    
+    # Must dig into checkpoint internals to extract displayable messages
+    messages = checkpoints[-1].checkpoint["channel_values"]["messages"]
+    # No record of which agent responded — lost in checkpoint format
+    return filter_displayable(messages)
+```
+
+**Correct (store displayable history in a dedicated container):**
+
+```python
+from azure.cosmos import CosmosClient
+
+# Dedicated container with partition key /sessionId for efficient retrieval
+history_container = database.get_container_client("ChatHistory")
+
+def store_chat_message(session_id: str, tenant_id: str, user_id: str, 
+                       sender: str, text: str, agent_name: str):
+    """Store a single displayable message after graph execution completes."""
+    history_container.create_item({
+        "id": str(uuid.uuid4()),
+        "sessionId": session_id,
+        "tenantId": tenant_id,
+        "userId": user_id,
+        "sender": sender,
+        "agentName": agent_name,  # Which agent responded — not available in checkpoints
+        "text": text,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+
+@app.get("/sessions/{session_id}/messages")
+def get_messages(session_id: str):
+    # Single-partition query — fast and cheap (few RUs)
+    return list(history_container.query_items(
+        query="SELECT * FROM c WHERE c.sessionId = @sid ORDER BY c.timestamp",
+        parameters=[{"name": "@sid", "value": session_id}],
+        partition_key=session_id
+    ))
+```
+
+**Why separate storage:**
+1. **Agent attribution** — checkpoints don't track which agent produced each response
+2. **Query efficiency** — dedicated container with `/sessionId` partition key enables single-partition queries
+3. **Cleaner data** — no tool messages, system messages, or graph internal state
+4. **Independent scaling** — chat history access patterns differ from checkpointing (read-heavy vs. write-heavy)
+
+Reference: [Azure Cosmos DB container design](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-model-partition-example)
+
+### 9.6 Use count-based or cached rank approaches instead of full partition scans for ranking
 
 **Impact: HIGH** (reduces rank lookups from O(N) partition scans to O(1) or O(log N) operations)
 
@@ -10156,7 +10294,89 @@ public class ScoreBucket
 
 Reference: [Cosmos DB query optimization](https://learn.microsoft.com/azure/cosmos-db/nosql/query/getting-started)
 
-### 9.5 Use LangGraph Interrupt for Human-in-the-Loop Confirmation
+### 9.7 Initialize LangGraph Agents in FastAPI Startup with Retry
+
+**Impact: HIGH** (prevents request failures when dependent services are not yet ready)
+
+## Initialize LangGraph Agents in FastAPI Startup with Retry
+
+**Impact: HIGH (prevents request failures when dependent services are not yet ready)**
+
+LangGraph agents that depend on external services (MCP servers, Cosmos DB, Azure OpenAI) must be initialized asynchronously during application startup, not at module import time or on first request. Use FastAPI's startup event (or lifespan) with retry logic to handle cases where dependent services take time to become available (e.g., in container orchestration environments where services start in parallel).
+
+**Incorrect (initialize at module level — blocks import, no retry):**
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+# BAD: Runs at import time, fails if MCP server isn't ready yet
+client = MultiServerMCPClient({"server": {"transport": "streamable_http", "url": mcp_url}})
+tools = asyncio.run(load_tools(client))  # Blocks and may fail
+```
+
+**Incorrect (initialize on first request — slow first response, no retry):**
+
+```python
+@app.post("/chat")
+async def chat(message: str):
+    global _initialized
+    if not _initialized:
+        # BAD: First user pays full initialization cost (seconds)
+        # No retry if MCP server is temporarily unavailable
+        await setup_agents()
+        _initialized = True
+    # ...
+```
+
+**Correct (startup event with retry and fallback):**
+
+```python
+import asyncio
+from fastapi import FastAPI, HTTPException
+
+app = FastAPI()
+_agents_ready = False
+
+@app.on_event("startup")
+async def initialize_agents():
+    global _agents_ready
+    max_retries = 5
+    retry_delay = 10  # seconds
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            await setup_agents()  # Connects to MCP, loads tools, creates agents, inits checkpointer
+            _agents_ready = True
+            return
+        except Exception as e:
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+            else:
+                # Start anyway — will initialize on demand
+                _agents_ready = False
+
+async def ensure_ready():
+    """Dependency that ensures agents are initialized before handling requests."""
+    if not _agents_ready:
+        try:
+            await setup_agents()
+        except Exception:
+            raise HTTPException(status_code=503, detail="Service unavailable — agents not initialized")
+
+@app.post("/chat")
+async def chat(message: str):
+    await ensure_ready()
+    # ... handle request ...
+```
+
+**Production tips:**
+- Set retry delay via environment variable (e.g., `STARTUP_DELAY_SECONDS`) for container orchestration tuning
+- Add a `/health/ready` endpoint that returns 503 until `_agents_ready` is `True` — used by load balancers and container health probes
+- For FastAPI >= 0.93, prefer `lifespan` context manager over deprecated `on_event`
+
+Reference: [FastAPI lifespan events](https://fastapi.tiangolo.com/advanced/events/)
+
+### 9.8 Use LangGraph Interrupt for Human-in-the-Loop Confirmation
 
 **Impact: HIGH** (enables safe confirmation flows for sensitive operations)
 
@@ -10222,7 +10442,7 @@ graph = builder.compile(checkpointer=CosmosDBSaver(async_container))
 
 Reference: [LangGraph human-in-the-loop](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/)
 
-### 9.6 Use StateGraph with Conditional Edges for Multi-Agent Routing
+### 9.9 Use StateGraph with Conditional Edges for Multi-Agent Routing
 
 **Impact: HIGH** (enables deterministic agent hand-off in multi-agent LangGraph applications)
 
@@ -10293,7 +10513,68 @@ graph = builder.compile(checkpointer=CosmosDBSaver(async_container))
 
 Reference: [LangGraph multi-agent patterns](https://langchain-ai.github.io/langgraph/concepts/multi_agent/)
 
-### 9.7 Use a service layer to hydrate document references before rendering
+### 9.10 Resume LangGraph from Checkpoint After Interrupt
+
+**Impact: HIGH** (enables multi-turn conversations with persistent state)
+
+## Resume LangGraph from Checkpoint After Interrupt
+
+**Impact: HIGH (enables multi-turn conversations with persistent state)**
+
+When a LangGraph graph pauses at an `interrupt()` node, the next user message must resume from the last checkpoint rather than starting fresh. Retrieve the last checkpoint, append the new user message, inject `langgraph_triggers` to signal which node to resume, and call `ainvoke` with `stream_mode="updates"`. Without proper resume logic, each message starts a new conversation with no memory of prior turns.
+
+**Incorrect (always starts a fresh graph invocation):**
+
+```python
+@app.post("/chat/{session_id}")
+async def chat(session_id: str, user_message: str):
+    config = {"configurable": {"thread_id": session_id}}
+    # BAD: Always starts from scratch — ignores prior conversation state
+    state = {"messages": [{"role": "user", "content": user_message}]}
+    response = await graph.ainvoke(state, config, stream_mode="updates")
+    return extract_response(response)
+```
+
+**Correct (resume from last checkpoint when one exists):**
+
+```python
+@app.post("/chat/{session_id}")
+async def chat(session_id: str, user_message: str):
+    config = {"configurable": {"thread_id": session_id, "checkpoint_ns": ""}}
+
+    # Check for existing checkpoint (prior conversation state)
+    checkpoints = [cp async for cp in checkpointer.alist(config)]
+
+    if not checkpoints:
+        # First message — start fresh
+        state = {"messages": [{"role": "user", "content": user_message}]}
+    else:
+        # Resume from last checkpoint
+        last_checkpoint = checkpoints[-1]
+        state = last_checkpoint.checkpoint
+
+        if "messages" not in state:
+            state["messages"] = []
+        state["messages"].append({"role": "user", "content": user_message})
+
+        # Signal which node to resume from (required after interrupt)
+        # Determine the last active agent from channel_versions or external state
+        resume_node = determine_resume_node(state)
+        state["langgraph_triggers"] = [f"resume:{resume_node}"]
+
+    response = await graph.ainvoke(state, config, stream_mode="updates")
+    return extract_response(response)
+```
+
+**Key details:**
+1. `stream_mode="updates"` returns per-node state diffs, making it easy to extract only the final agent response
+2. `langgraph_triggers` tells the graph which paused node to resume — without it, the graph may restart from START
+3. The `checkpoint_ns` must match what was used when the checkpoint was written (typically `""`)
+4. Use `checkpointer.alist(config)` to list checkpoints — this is an async generator
+
+Reference: [LangGraph persistence](https://langchain-ai.github.io/langgraph/concepts/persistence/)
+
+### 9.11 Use a service layer to hydrate document references before rendering
 
 **Impact: HIGH** (bridges document storage with frameworks expecting object graphs, prevents empty/null relationship data)
 
