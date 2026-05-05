@@ -21,25 +21,41 @@ async def route_message(state, config):
     return determine_agent_from_response(response)
 ```
 
-**Correct (point read for active agent, coordinator only for new conversations):**
+**Correct (async point read for active agent, coordinator only for new conversations):**
 
 ```python
+import asyncio
 from azure.cosmos import CosmosClient
 
-def get_active_agent(state, config) -> str:
-    thread_id = config["configurable"]["thread_id"]
-    user_id = config["configurable"]["userId"]
-    tenant_id = config["configurable"]["tenantId"]
-
-    # O(1) point read — single-digit ms latency, 1 RU cost
+def _read_active_agent_from_db(tenant_id: str, user_id: str, thread_id: str) -> str:
+    """Synchronous helper — runs in a thread pool."""
     try:
         item = container.read_item(
             item=thread_id,
             partition_key=[tenant_id, user_id, thread_id]
         )
-        active_agent = item.get("activeAgent", "unknown")
+        return item.get("activeAgent", "unknown")
     except Exception:
-        active_agent = "unknown"
+        return "unknown"
+
+async def get_active_agent(state, config) -> str:
+    """Routing function — must be async and must NEVER raise."""
+    thread_id = config.get("configurable", {}).get("thread_id", "")
+    user_id = config.get("configurable", {}).get("userId", "")
+    tenant_id = config.get("configurable", {}).get("tenantId", "")
+
+    # O(1) point read — single-digit ms latency, 1 RU cost
+    # Wrapped in asyncio.to_thread to avoid blocking the event loop
+    try:
+        active_agent = await asyncio.wait_for(
+            asyncio.to_thread(_read_active_agent_from_db, tenant_id, user_id, thread_id),
+            timeout=5.0,
+        )
+    except Exception:
+        # Covers: CosmosResourceNotFoundError (new session),
+        # asyncio.TimeoutError (cold start / slow DB),
+        # CredentialUnavailableError (auth not ready)
+        return "coordinator"
 
     # If an agent is already assigned, route directly — skip coordinator
     if active_agent not in [None, "unknown", "coordinator"]:
@@ -70,5 +86,7 @@ def patch_active_agent(tenant_id, user_id, thread_id, new_agent):
 2. The point read costs 1 RU regardless of document size
 3. Use patch operations (not full replace) to update the active agent — costs fewer RUs
 4. Fall back to the coordinator only when `activeAgent` is `null` or `"unknown"`
+5. The routing function must NEVER raise — any exception (404, timeout, credential error) should fall through to the coordinator
+6. Always use `asyncio.to_thread()` for sync Cosmos DB calls in routing functions to avoid blocking the event loop
 
 Reference: [Azure Cosmos DB point reads](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-read-item)

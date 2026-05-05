@@ -112,13 +112,16 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
    - 9.2 [Use Background Tasks for Non-Blocking Chat History Storage](#92-use-background-tasks-for-non-blocking-chat-history-storage)
    - 9.3 [Use Change Feed for cross-partition query optimization with materialized views](#93-use-change-feed-for-cross-partition-query-optimization-with-materialized-views)
    - 9.4 [Use count-based or cached rank approaches instead of full partition scans for ranking](#94-use-count-based-or-cached-rank-approaches-instead-of-full-partition-scans-for-ranking)
-   - 9.5 [Persist Active Agent in Cosmos DB for Deterministic Routing](#95-persist-active-agent-in-cosmos-db-for-deterministic-routing)
-   - 9.6 [Store Chat History Separately from LangGraph Checkpoints](#96-store-chat-history-separately-from-langgraph-checkpoints)
-   - 9.7 [Initialize LangGraph Agents in FastAPI Startup with Retry](#97-initialize-langgraph-agents-in-fastapi-startup-with-retry)
-   - 9.8 [Use LangGraph Interrupt for Human-in-the-Loop Confirmation](#98-use-langgraph-interrupt-for-human-in-the-loop-confirmation)
-   - 9.9 [Use StateGraph with Conditional Edges for Multi-Agent Routing](#99-use-stategraph-with-conditional-edges-for-multi-agent-routing)
-   - 9.10 [Resume LangGraph from Checkpoint After Interrupt](#910-resume-langgraph-from-checkpoint-after-interrupt)
-   - 9.11 [Use a service layer to hydrate document references before rendering](#911-use-a-service-layer-to-hydrate-document-references-before-rendering)
+   - 9.5 [Tag AI Messages with Agent Name for API Response Attribution](#95-tag-ai-messages-with-agent-name-for-api-response-attribution)
+   - 9.6 [Persist Active Agent in Cosmos DB for Deterministic Routing](#96-persist-active-agent-in-cosmos-db-for-deterministic-routing)
+   - 9.7 [Wrap Cosmos DB Sync Calls in asyncio.to_thread for LangGraph Routing Functions](#97-wrap-cosmos-db-sync-calls-in-asyncio-to-thread-for-langgraph-routing-functions)
+   - 9.8 [Use asyncio.to_thread for Active Agent Writes in LangGraph Node Functions](#98-use-asyncio-to-thread-for-active-agent-writes-in-langgraph-node-functions)
+   - 9.9 [Store Chat History Separately from LangGraph Checkpoints](#99-store-chat-history-separately-from-langgraph-checkpoints)
+   - 9.10 [Initialize LangGraph Agents in FastAPI Startup with Retry](#910-initialize-langgraph-agents-in-fastapi-startup-with-retry)
+   - 9.11 [Use LangGraph Interrupt for Human-in-the-Loop Confirmation](#911-use-langgraph-interrupt-for-human-in-the-loop-confirmation)
+   - 9.12 [Use StateGraph with Conditional Edges for Multi-Agent Routing](#912-use-stategraph-with-conditional-edges-for-multi-agent-routing)
+   - 9.13 [Resume LangGraph from Checkpoint After Interrupt](#913-resume-langgraph-from-checkpoint-after-interrupt)
+   - 9.14 [Use a service layer to hydrate document references before rendering](#914-use-a-service-layer-to-hydrate-document-references-before-rendering)
 10. [Developer Tooling](#10-developer-tooling) — **MEDIUM**
    - 10.1 [Use Azure Cosmos DB Emulator for local development and testing](#101-use-azure-cosmos-db-emulator-for-local-development-and-testing)
    - 10.2 [Use Azure Cosmos DB VS Code extension for routine inspection and management](#102-use-azure-cosmos-db-vs-code-extension-for-routine-inspection-and-management)
@@ -5561,26 +5564,49 @@ Reference: [langchain-azure-cosmosdb documentation](https://python.langchain.com
 
 **Impact: HIGH (prevents session initialization overhead and connection churn)**
 
-When using `MultiServerMCPClient` with LangGraph agents, maintain a single persistent session for the lifetime of your application rather than creating a new session per request. MCP sessions involve transport negotiation, tool discovery, and server handshakes. Creating a session per request adds latency and may exhaust server connection limits.
+When using `MultiServerMCPClient` with LangGraph agents, avoid creating a new client instance per request. MCP sessions involve transport negotiation, tool discovery, and server handshakes. Creating a client per request adds latency and may exhaust server connection limits.
 
-**Incorrect (new session per request — high overhead):**
+**Note:** The API changed significantly in `langchain-mcp-adapters >= 0.2.0`. The persistent session pattern (manual `__aenter__`/`__aexit__`) only applies to versions `< 0.2.0`. In `>= 0.2.0`, sessions are managed internally per call via `get_tools()`.
+
+**Incorrect (new client per request — high overhead, applies to all versions):**
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.tools import load_mcp_tools
 
 async def handle_request(user_input):
+    # BAD: Creates a new client (and underlying sessions) for every single request
     client = MultiServerMCPClient({
         "my_server": {"transport": "streamable_http", "url": "http://localhost:8080/mcp"}
     })
-    # BAD: Creates and tears down a session for every single request
-    async with client.session("my_server") as session:
-        tools = await load_mcp_tools(session)
-        # ... invoke agent ...
-    # Session closed, next request pays setup cost again
+    tools = await client.get_tools()
+    # ... invoke agent ...
+    # Client discarded, next request pays setup cost again
 ```
 
-**Correct (persistent session initialized once at startup):**
+**Correct (>= 0.2.0 — single client instance, get_tools() manages sessions internally):**
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+_mcp_client: MultiServerMCPClient | None = None
+
+async def setup_mcp():
+    """Call once during application startup."""
+    global _mcp_client
+    _mcp_client = MultiServerMCPClient({
+        "my_server": {
+            "transport": "streamable_http",
+            "url": f"{MCP_SERVER_BASE_URL}/mcp",
+        }
+    })
+    # get_tools() creates a per-call session under the hood
+    tools = await _mcp_client.get_tools()
+    return tools
+
+# No explicit cleanup needed — sessions are per-call in >= 0.2.0
+```
+
+**Correct (< 0.2.0 only — persistent session initialized once at startup):**
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -5591,7 +5617,7 @@ _session_context = None
 _persistent_session = None
 
 async def setup_mcp():
-    """Call once during application startup."""
+    """Call once during application startup (< 0.2.0 API only)."""
     global _mcp_client, _session_context, _persistent_session
 
     _mcp_client = MultiServerMCPClient({
@@ -5605,7 +5631,7 @@ async def setup_mcp():
     return tools
 
 async def cleanup_mcp():
-    """Call during application shutdown."""
+    """Call during application shutdown (< 0.2.0 API only)."""
     global _session_context, _persistent_session
     if _session_context and _persistent_session:
         await _session_context.__aexit__(None, None, None)
@@ -10361,7 +10387,53 @@ public class ScoreBucket
 
 Reference: [Cosmos DB query optimization](https://learn.microsoft.com/azure/cosmos-db/nosql/query/getting-started)
 
-### 9.5 Persist Active Agent in Cosmos DB for Deterministic Routing
+### 9.5 Tag AI Messages with Agent Name for API Response Attribution
+
+**Impact: MEDIUM** (enables API layer to report which agent generated a response for UI display and logging)
+
+## Tag AI Messages with Agent Name for API Response Attribution
+
+**Impact: MEDIUM (enables API layer to report which agent generated a response for UI display and logging)**
+
+`create_react_agent` does not set the `name` field on AI messages it produces. If the API layer needs to report which agent generated a response (e.g., for UI display or logging), it has no way to determine this from the message itself. Tag the last AI message with the agent name before returning from each node function.
+
+**Incorrect (no attribution — API cannot determine which agent responded):**
+
+```python
+async def call_product_search(state, config):
+    response = await product_search_agent.ainvoke(state)
+    # BAD: No way to tell which agent produced this response at the API layer
+    return Command(update=response, goto=END)
+```
+
+**Correct (tag last AI message with agent name):**
+
+```python
+def _tag_last_ai_message(response: dict, agent_name: str) -> dict:
+    """Set `name` on the last AI message for API-layer attribution."""
+    msgs = response.get("messages", [])
+    for msg in reversed(msgs):
+        if hasattr(msg, "type") and msg.type == "ai" and msg.content:
+            msg.name = agent_name
+            break
+    return response
+
+async def call_product_search(state, config):
+    response = await product_search_agent.ainvoke(state)
+    # Tag the response so the API layer knows which agent answered
+    _tag_last_ai_message(response, "product_search_agent")
+    return Command(update=response, goto=END)
+```
+
+**Key points:**
+1. Iterate in reverse to find the last AI message with content (skip empty tool-call messages)
+2. Set `msg.name = agent_name` — LangGraph preserves this field through state updates
+3. Apply tagging in every node function before returning the `Command`
+4. The API layer can then read `message.name` to display agent attribution in the UI
+
+Reference: [LangGraph multi-agent patterns](https://langchain-ai.github.io/langgraph/concepts/multi_agent/)
+
+### 9.6 Persist Active Agent in Cosmos DB for Deterministic Routing
 
 **Impact: HIGH** (eliminates LLM re-classification overhead and prevents routing drift)
 
@@ -10381,25 +10453,41 @@ async def route_message(state, config):
     return determine_agent_from_response(response)
 ```
 
-**Correct (point read for active agent, coordinator only for new conversations):**
+**Correct (async point read for active agent, coordinator only for new conversations):**
 
 ```python
+import asyncio
 from azure.cosmos import CosmosClient
 
-def get_active_agent(state, config) -> str:
-    thread_id = config["configurable"]["thread_id"]
-    user_id = config["configurable"]["userId"]
-    tenant_id = config["configurable"]["tenantId"]
-
-    # O(1) point read — single-digit ms latency, 1 RU cost
+def _read_active_agent_from_db(tenant_id: str, user_id: str, thread_id: str) -> str:
+    """Synchronous helper — runs in a thread pool."""
     try:
         item = container.read_item(
             item=thread_id,
             partition_key=[tenant_id, user_id, thread_id]
         )
-        active_agent = item.get("activeAgent", "unknown")
+        return item.get("activeAgent", "unknown")
     except Exception:
-        active_agent = "unknown"
+        return "unknown"
+
+async def get_active_agent(state, config) -> str:
+    """Routing function — must be async and must NEVER raise."""
+    thread_id = config.get("configurable", {}).get("thread_id", "")
+    user_id = config.get("configurable", {}).get("userId", "")
+    tenant_id = config.get("configurable", {}).get("tenantId", "")
+
+    # O(1) point read — single-digit ms latency, 1 RU cost
+    # Wrapped in asyncio.to_thread to avoid blocking the event loop
+    try:
+        active_agent = await asyncio.wait_for(
+            asyncio.to_thread(_read_active_agent_from_db, tenant_id, user_id, thread_id),
+            timeout=5.0,
+        )
+    except Exception:
+        # Covers: CosmosResourceNotFoundError (new session),
+        # asyncio.TimeoutError (cold start / slow DB),
+        # CredentialUnavailableError (auth not ready)
+        return "coordinator"
 
     # If an agent is already assigned, route directly — skip coordinator
     if active_agent not in [None, "unknown", "coordinator"]:
@@ -10430,10 +10518,148 @@ def patch_active_agent(tenant_id, user_id, thread_id, new_agent):
 2. The point read costs 1 RU regardless of document size
 3. Use patch operations (not full replace) to update the active agent — costs fewer RUs
 4. Fall back to the coordinator only when `activeAgent` is `null` or `"unknown"`
+5. The routing function must NEVER raise — any exception (404, timeout, credential error) should fall through to the coordinator
+6. Always use `asyncio.to_thread()` for sync Cosmos DB calls in routing functions to avoid blocking the event loop
 
 Reference: [Azure Cosmos DB point reads](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-read-item)
 
-### 9.6 Store Chat History Separately from LangGraph Checkpoints
+### 9.7 Wrap Cosmos DB Sync Calls in asyncio.to_thread for LangGraph Routing Functions
+
+**Impact: CRITICAL** (prevents event loop blocking that causes all concurrent requests to hang)
+
+## Wrap Cosmos DB Sync Calls in asyncio.to_thread for LangGraph Routing Functions
+
+**Impact: CRITICAL (prevents event loop blocking that causes all concurrent requests to hang)**
+
+LangGraph's `add_conditional_edges` routing function runs inside the async event loop. If the routing function calls `DefaultAzureCredential` or `container.read_item()` synchronously, it blocks the entire event loop — causing all concurrent requests to hang and potentially triggering timeouts. Always wrap synchronous Cosmos DB SDK calls in `asyncio.to_thread()` and add a timeout to prevent hung routing if Cosmos DB is slow or unreachable.
+
+**Incorrect (synchronous Cosmos DB call blocks the event loop):**
+
+```python
+from azure.cosmos import CosmosClient
+
+def get_active_agent(state, config) -> str:
+    thread_id = config["configurable"]["thread_id"]
+    # BAD: Blocks the event loop when called from LangGraph's async runtime
+    item = container.read_item(item=thread_id, partition_key=thread_id)
+    active_agent = item.get("activeAgent", "unknown")
+    if active_agent not in [None, "unknown", "coordinator"]:
+        return active_agent
+    return "coordinator"
+```
+
+**Correct (async wrapper with timeout and fallback):**
+
+```python
+import asyncio
+from azure.cosmos import CosmosClient
+
+def _read_active_agent_from_db(thread_id: str) -> str:
+    """Synchronous helper — runs in a thread pool."""
+    container = get_sync_container("ChatSessions")
+    item = container.read_item(item=thread_id, partition_key=thread_id)
+    return item.get("activeAgent", "unknown")
+
+async def get_active_agent_from_db(thread_id: str) -> str:
+    """Non-blocking wrapper with timeout for reading active agent from Cosmos DB."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_read_active_agent_from_db, thread_id),
+            timeout=5.0,
+        )
+    except Exception:
+        # Covers: CosmosResourceNotFoundError (new session),
+        # asyncio.TimeoutError (cold start / slow DB),
+        # CredentialUnavailableError (auth not ready)
+        return "unknown"
+
+async def get_active_agent(state, config) -> str:
+    """Routing function for add_conditional_edges — must be async def."""
+    thread_id = config.get("configurable", {}).get("thread_id", "")
+    active_agent = await get_active_agent_from_db(thread_id)
+    if active_agent not in [None, "unknown", "coordinator"]:
+        return active_agent
+    return "coordinator"
+```
+
+**Key points:**
+1. The routing function MUST be `async def` when using Cosmos DB lookups
+2. Always wrap `DefaultAzureCredential` and `read_item()` in `asyncio.to_thread()`
+3. Add a timeout (5s) to prevent hung routing if Cosmos DB is slow or unreachable
+4. Fall back to "coordinator" on any exception — never let a DB failure crash the graph
+5. The routing function must NEVER raise — it runs on every single message as a graph entry point
+
+Reference: [Python asyncio.to_thread documentation](https://docs.python.org/3/library/asyncio-task.html#asyncio.to_thread)
+
+### 9.8 Use asyncio.to_thread for Active Agent Writes in LangGraph Node Functions
+
+**Impact: HIGH** (prevents event loop blocking during Cosmos DB upserts in async node functions)
+
+## Use asyncio.to_thread for Active Agent Writes in LangGraph Node Functions
+
+**Impact: HIGH (prevents event loop blocking during Cosmos DB upserts in async node functions)**
+
+When saving the active agent after a transfer (inside a LangGraph node function), using the sync Cosmos DB SDK also blocks the event loop. Node functions in LangGraph run as coroutines. Wrap synchronous write operations in `asyncio.to_thread()` to keep the event loop responsive.
+
+**Incorrect (synchronous upsert blocks the event loop inside an async node):**
+
+```python
+async def call_agent(state, config):
+    response = await agent.ainvoke(state)
+    # BAD: Blocks the event loop during upsert
+    container.upsert_item({
+        "id": thread_id,
+        "sessionId": thread_id,
+        "activeAgent": "target_agent",
+    })
+    return Command(update=response, goto="target_agent")
+```
+
+**Correct (non-blocking write with asyncio.to_thread):**
+
+```python
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def save_active_agent_to_db_async(
+    thread_id: str, agent_name: str, tenant_id: str, user_id: str
+):
+    """Non-blocking upsert of active agent to Cosmos DB."""
+    def _save():
+        try:
+            container = get_sync_container("ChatSessions")
+            container.upsert_item({
+                "id": thread_id,
+                "sessionId": thread_id,
+                "tenantId": tenant_id,
+                "userId": user_id,
+                "activeAgent": agent_name,
+            })
+        except Exception as e:
+            logger.error(f"Failed to save active agent: {e}")
+    await asyncio.to_thread(_save)
+
+async def call_agent(state, config):
+    response = await agent.ainvoke(state)
+    thread_id = config.get("configurable", {}).get("thread_id", "")
+    tenant_id = config.get("configurable", {}).get("tenantId", "")
+    user_id = config.get("configurable", {}).get("userId", "")
+    # Non-blocking write — errors logged but not propagated
+    await save_active_agent_to_db_async(thread_id, "target_agent", tenant_id, user_id)
+    return Command(update=response, goto="target_agent")
+```
+
+**Key points:**
+1. Wrap all synchronous Cosmos DB write operations in `asyncio.to_thread()` inside async node functions
+2. Writes can be fire-and-forget — errors are logged but not propagated, since failing to persist the active agent is not fatal to the current request
+3. Keep the synchronous logic in a nested helper function for clarity and thread-safety
+4. Use `upsert_item` (not `create_item`) to handle both new and existing sessions
+
+Reference: [Python asyncio.to_thread documentation](https://docs.python.org/3/library/asyncio-task.html#asyncio.to_thread)
+
+### 9.9 Store Chat History Separately from LangGraph Checkpoints
 
 **Impact: MEDIUM** (enables efficient message retrieval and agent attribution)
 
@@ -10501,7 +10727,7 @@ def get_messages(session_id: str):
 
 Reference: [Azure Cosmos DB container design](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-model-partition-example)
 
-### 9.7 Initialize LangGraph Agents in FastAPI Startup with Retry
+### 9.10 Initialize LangGraph Agents in FastAPI Startup with Retry
 
 **Impact: HIGH** (prevents request failures when dependent services are not yet ready)
 
@@ -10583,7 +10809,7 @@ async def chat(message: str):
 
 Reference: [FastAPI lifespan events](https://fastapi.tiangolo.com/advanced/events/)
 
-### 9.8 Use LangGraph Interrupt for Human-in-the-Loop Confirmation
+### 9.11 Use LangGraph Interrupt for Human-in-the-Loop Confirmation
 
 **Impact: HIGH** (enables safe confirmation flows for sensitive operations)
 
@@ -10649,7 +10875,7 @@ graph = builder.compile(checkpointer=CosmosDBSaver(async_container))
 
 Reference: [LangGraph human-in-the-loop](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/)
 
-### 9.9 Use StateGraph with Conditional Edges for Multi-Agent Routing
+### 9.12 Use StateGraph with Conditional Edges for Multi-Agent Routing
 
 **Impact: HIGH** (enables deterministic agent hand-off in multi-agent LangGraph applications)
 
@@ -10712,15 +10938,35 @@ builder.add_conditional_edges(
 graph = builder.compile(checkpointer=CosmosDBSaver(async_container))
 ```
 
+**Critical: Only check NEW messages for routing decisions.** When a sub-agent is invoked with `await agent.ainvoke(state)`, the response contains ALL messages — both the existing conversation history AND new messages. If node functions iterate all messages to find routing ToolMessages, they will find old routing messages from previous turns and re-route infinitely, causing a `GraphRecursionError`.
+
+```python
+async def call_agent_a(state: MessagesState, config) -> Command[Literal["agent_a", "agent_b", "human"]]:
+    response = await agent_a.ainvoke(state)
+
+    # CRITICAL: Only check NEW messages added by this invocation
+    existing_count = len(state.get("messages", []))
+    new_messages = response.get("messages", [])[existing_count:]
+
+    for msg in reversed(new_messages):
+        if isinstance(msg, ToolMessage):
+            goto = extract_routing_info(msg)
+            if goto:
+                return Command(update=response, goto=goto)
+
+    return Command(update=response, goto="human")
+```
+
 **Key principles:**
 1. Each agent node returns `Command(update=response, goto="human")` to yield control back for user input
 2. After user input, the coordinator's conditional edge function decides which agent continues
 3. Use Cosmos DB point reads in the routing function for O(1) active-agent lookups
 4. Include a fallback route to the coordinator when the active agent is unknown
+5. Always slice `response["messages"]` by `len(state["messages"])` to get only new messages — never iterate the full history for routing decisions
 
 Reference: [LangGraph multi-agent patterns](https://langchain-ai.github.io/langgraph/concepts/multi_agent/)
 
-### 9.10 Resume LangGraph from Checkpoint After Interrupt
+### 9.13 Resume LangGraph from Checkpoint After Interrupt
 
 **Impact: HIGH** (enables multi-turn conversations with persistent state)
 
@@ -10781,7 +11027,7 @@ async def chat(session_id: str, user_message: str):
 
 Reference: [LangGraph persistence](https://langchain-ai.github.io/langgraph/concepts/persistence/)
 
-### 9.11 Use a service layer to hydrate document references before rendering
+### 9.14 Use a service layer to hydrate document references before rendering
 
 **Impact: HIGH** (bridges document storage with frameworks expecting object graphs, prevents empty/null relationship data)
 
