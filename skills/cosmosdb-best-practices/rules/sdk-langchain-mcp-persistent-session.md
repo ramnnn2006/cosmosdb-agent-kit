@@ -9,26 +9,49 @@ tags: sdk, python, mcp, session, langchain
 
 **Impact: HIGH (prevents session initialization overhead and connection churn)**
 
-When using `MultiServerMCPClient` with LangGraph agents, maintain a single persistent session for the lifetime of your application rather than creating a new session per request. MCP sessions involve transport negotiation, tool discovery, and server handshakes. Creating a session per request adds latency and may exhaust server connection limits.
+When using `MultiServerMCPClient` with LangGraph agents, avoid creating a new client instance per request. MCP sessions involve transport negotiation, tool discovery, and server handshakes. Creating a client per request adds latency and may exhaust server connection limits.
 
-**Incorrect (new session per request — high overhead):**
+**Note:** The API changed significantly in `langchain-mcp-adapters >= 0.2.0`. The persistent session pattern (manual `__aenter__`/`__aexit__`) only applies to versions `< 0.2.0`. In `>= 0.2.0`, sessions are managed internally per call via `get_tools()`.
+
+**Incorrect (new client per request — high overhead, applies to all versions):**
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.tools import load_mcp_tools
 
 async def handle_request(user_input):
+    # BAD: Creates a new client (and underlying sessions) for every single request
     client = MultiServerMCPClient({
         "my_server": {"transport": "streamable_http", "url": "http://localhost:8080/mcp"}
     })
-    # BAD: Creates and tears down a session for every single request
-    async with client.session("my_server") as session:
-        tools = await load_mcp_tools(session)
-        # ... invoke agent ...
-    # Session closed, next request pays setup cost again
+    tools = await client.get_tools()
+    # ... invoke agent ...
+    # Client discarded, next request pays setup cost again
 ```
 
-**Correct (persistent session initialized once at startup):**
+**Correct (>= 0.2.0 — single client instance, get_tools() manages sessions internally):**
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+_mcp_client: MultiServerMCPClient | None = None
+
+async def setup_mcp():
+    """Call once during application startup."""
+    global _mcp_client
+    _mcp_client = MultiServerMCPClient({
+        "my_server": {
+            "transport": "streamable_http",
+            "url": f"{MCP_SERVER_BASE_URL}/mcp",
+        }
+    })
+    # get_tools() creates a per-call session under the hood
+    tools = await _mcp_client.get_tools()
+    return tools
+
+# No explicit cleanup needed — sessions are per-call in >= 0.2.0
+```
+
+**Correct (< 0.2.0 only — persistent session initialized once at startup):**
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -39,7 +62,7 @@ _session_context = None
 _persistent_session = None
 
 async def setup_mcp():
-    """Call once during application startup."""
+    """Call once during application startup (< 0.2.0 API only)."""
     global _mcp_client, _session_context, _persistent_session
 
     _mcp_client = MultiServerMCPClient({
@@ -53,7 +76,7 @@ async def setup_mcp():
     return tools
 
 async def cleanup_mcp():
-    """Call during application shutdown."""
+    """Call during application shutdown (< 0.2.0 API only)."""
     global _session_context, _persistent_session
     if _session_context and _persistent_session:
         await _session_context.__aexit__(None, None, None)

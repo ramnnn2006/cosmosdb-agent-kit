@@ -64,10 +64,30 @@ builder.add_conditional_edges(
 graph = builder.compile(checkpointer=CosmosDBSaver(async_container))
 ```
 
+**Critical: Only check NEW messages for routing decisions.** When a sub-agent is invoked with `await agent.ainvoke(state)`, the response contains ALL messages — both the existing conversation history AND new messages. If node functions iterate all messages to find routing ToolMessages, they will find old routing messages from previous turns and re-route infinitely, causing a `GraphRecursionError`.
+
+```python
+async def call_agent_a(state: MessagesState, config) -> Command[Literal["agent_a", "agent_b", "human"]]:
+    response = await agent_a.ainvoke(state)
+
+    # CRITICAL: Only check NEW messages added by this invocation
+    existing_count = len(state.get("messages", []))
+    new_messages = response.get("messages", [])[existing_count:]
+
+    for msg in reversed(new_messages):
+        if isinstance(msg, ToolMessage):
+            goto = extract_routing_info(msg)
+            if goto:
+                return Command(update=response, goto=goto)
+
+    return Command(update=response, goto="human")
+```
+
 **Key principles:**
 1. Each agent node returns `Command(update=response, goto="human")` to yield control back for user input
 2. After user input, the coordinator's conditional edge function decides which agent continues
 3. Use Cosmos DB point reads in the routing function for O(1) active-agent lookups
 4. Include a fallback route to the coordinator when the active agent is unknown
+5. Always slice `response["messages"]` by `len(state["messages"])` to get only new messages — never iterate the full history for routing decisions
 
 Reference: [LangGraph multi-agent patterns](https://langchain-ai.github.io/langgraph/concepts/multi_agent/)

@@ -9,6 +9,15 @@ This is the high-level log. For detailed per-iteration evaluation notes (test re
 
 ---
 
+## 2026-05-05 — Multi-agent testing: new rules and amendments
+
+- **New rule:** `pattern-langgraph-async-cosmos-routing.md` — Wrap Cosmos DB sync calls in `asyncio.to_thread` for LangGraph routing functions (CRITICAL).
+- **New rule:** `pattern-langgraph-async-cosmos-writes.md` — Use `asyncio.to_thread` for active agent writes in async node functions (HIGH).
+- **New rule:** `pattern-langgraph-agent-name-attribution.md` — Tag AI messages with agent name for API response attribution (MEDIUM).
+- **Amended:** `sdk-langchain-mcp-persistent-session.md` — Updated for `langchain-mcp-adapters >= 0.2.0` API (`get_tools()` replaces manual session management); kept `< 0.2.0` example for backward reference.
+- **Amended:** `pattern-langgraph-multi-agent.md` — Added critical guidance to only check NEW messages (slice by existing count) to prevent infinite recursion loops.
+- **Amended:** `pattern-langgraph-agent-routing-cosmosdb.md` — Converted routing function to async with `asyncio.to_thread`, added 5s timeout, explicit exception handling for 404/timeout/credential errors.
+
 ## 2026-04-30 — ecommerce-order-api iteration-001-rust evaluation ([#274](https://github.com/TheovanKraay/cosmosdb-agent-kit/pull/274))
 
 - Fixed 5 test failures: added `pending → delivered` transition, composite indexes, type discriminator, schema version fields.
