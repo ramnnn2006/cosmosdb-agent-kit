@@ -10,7 +10,7 @@ Skills follow the [Agent Skills](https://agentskills.io/) format.
 
 ### cosmosdb-best-practices
 
-Azure Cosmos DB performance optimization guidelines containing 90+ rules across 12 categories, prioritized by impact.
+Azure Cosmos DB performance optimization guidelines containing 109 rules across 12 categories, prioritized by impact.
 
 **Use when:**
 - Writing new code that interacts with Cosmos DB
@@ -23,9 +23,13 @@ Azure Cosmos DB performance optimization guidelines containing 90+ rules across 
 - Partition Key Design (Critical)
 - Query Optimization (High)
 - SDK Best Practices (High)
+- Design Patterns (High)
+- Vector Search (High)
+- Full-Text Search (High)
 - Indexing Strategies (Medium-High)
 - Throughput & Scaling (Medium)
 - Global Distribution (Medium)
+- Developer Tooling (Medium)
 - Monitoring & Diagnostics (Low-Medium)
 
 ## Installation
