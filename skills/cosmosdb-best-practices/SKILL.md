@@ -109,6 +109,7 @@ Reference these guidelines when:
 - [sdk-java-cosmos-config](rules/sdk-java-cosmos-config.md) - Configure Cosmos DB initialization correctly in Spring Boot
 - [sdk-java-spring-boot-versions](rules/sdk-java-spring-boot-versions.md) - Match Java version to Spring Boot requirements
 - [sdk-local-dev-config](rules/sdk-local-dev-config.md) - Configure local development to avoid cloud conflicts
+- [sdk-dotnet-cosmos-package-id](rules/sdk-dotnet-cosmos-package-id.md) - Use `Microsoft.Azure.Cosmos`, not the abandoned `Azure.Cosmos` v4-preview package
 - [sdk-newtonsoft-dependency](rules/sdk-newtonsoft-dependency.md) - Explicitly reference Newtonsoft.Json package
 - [sdk-python-async-deps](rules/sdk-python-async-deps.md) - Include aiohttp when using Python async SDK
 - [sdk-spring-data-annotations](rules/sdk-spring-data-annotations.md) - Annotate entities for Spring Data Cosmos
@@ -118,6 +119,7 @@ Reference these guidelines when:
 - [sdk-langchain-mcp-persistent-session](rules/sdk-langchain-mcp-persistent-session.md) - Maintain persistent MCP client sessions for application lifetime
 - [sdk-langchain-mcp-tool-content-format](rules/sdk-langchain-mcp-tool-content-format.md) - Handle both string and list formats in MCP ToolMessage content
 - [sdk-langgraph-mcp-tool-filtering](rules/sdk-langgraph-mcp-tool-filtering.md) - Filter MCP tools by name prefix for per-agent assignment
+- [sdk-dotnet-namespace-collision](rules/sdk-dotnet-namespace-collision.md) - Avoid `Microsoft.Azure.Cosmos` namespace collisions with domain models (User, Database, Container, etc.)
 
 ### 5. Indexing Strategies (MEDIUM-HIGH)
 
