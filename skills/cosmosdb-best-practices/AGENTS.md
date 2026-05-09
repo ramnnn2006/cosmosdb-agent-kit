@@ -59,28 +59,29 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
    - 4.5 [Use Direct Connection Mode for Production](#45-use-direct-connection-mode-for-production)
    - 4.6 [Guard against empty continuation tokens before calling byPage](#46-guard-against-empty-continuation-tokens-before-calling-bypage)
    - 4.7 [Log Diagnostics for Troubleshooting](#47-log-diagnostics-for-troubleshooting)
-   - 4.8 [Configure SSL and connection mode for Cosmos DB Emulator](#48-configure-ssl-and-connection-mode-for-cosmos-db-emulator)
-   - 4.9 [Use ETags for optimistic concurrency on read-modify-write operations](#49-use-etags-for-optimistic-concurrency-on-read-modify-write-operations)
-   - 4.10 [Configure Excluded Regions for Dynamic Failover](#410-configure-excluded-regions-for-dynamic-failover)
-   - 4.11 [Unwrap CosmosItemResponse and enable content response in Java SDK](#411-unwrap-cosmositemresponse-and-enable-content-response-in-java-sdk)
-   - 4.12 [Use dependent @Bean methods for Cosmos DB initialization in Spring Boot](#412-use-dependent-bean-methods-for-cosmos-db-initialization-in-spring-boot)
-   - 4.13 [Spring Boot and Java version compatibility for Cosmos DB SDK](#413-spring-boot-and-java-version-compatibility-for-cosmos-db-sdk)
-   - 4.14 [Initialize Async Cosmos DB Container Before CosmosDBSaver](#414-initialize-async-cosmos-db-container-before-cosmosdbsaver)
-   - 4.15 [Use CosmosDBSaver for LangGraph Checkpointing](#415-use-cosmosdbsaver-for-langgraph-checkpointing)
-   - 4.16 [Use Persistent MCP Client Sessions for Multi-Agent Applications](#416-use-persistent-mcp-client-sessions-for-multi-agent-applications)
-   - 4.17 [Handle MCP ToolMessage Content Format Variations](#417-handle-mcp-toolmessage-content-format-variations)
-   - 4.18 [Filter MCP Tools by Name Prefix for Agent Assignment](#418-filter-mcp-tools-by-name-prefix-for-agent-assignment)
-   - 4.19 [Configure local development environment to avoid cloud connection conflicts](#419-configure-local-development-environment-to-avoid-cloud-connection-conflicts)
-   - 4.20 [Explicitly reference Newtonsoft.Json package](#420-explicitly-reference-newtonsoft-json-package)
-   - 4.21 [Use the Patch API for atomic counter increments](#421-use-the-patch-api-for-atomic-counter-increments)
-   - 4.22 [Configure Preferred Regions for Availability](#422-configure-preferred-regions-for-availability)
-   - 4.23 [Include aiohttp When Using Python Async SDK](#423-include-aiohttp-when-using-python-async-sdk)
-   - 4.24 [Never share a single CosmosItemRequestOptions instance across multiple createItem calls](#424-never-share-a-single-cosmositemrequestoptions-instance-across-multiple-createitem-calls)
-   - 4.25 [Handle 429 Errors with Retry-After](#425-handle-429-errors-with-retry-after)
-   - 4.26 [Use consistent enum serialization between Cosmos SDK and application layer](#426-use-consistent-enum-serialization-between-cosmos-sdk-and-application-layer)
-   - 4.27 [Reuse CosmosClient as Singleton](#427-reuse-cosmosclient-as-singleton)
-   - 4.28 [Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs](#428-annotate-entities-for-spring-data-cosmos-with-container-partitionkey-and-string-ids)
-   - 4.29 [Use CosmosRepository correctly and handle Iterable return types](#429-use-cosmosrepository-correctly-and-handle-iterable-return-types)
+   - 4.8 [Use Microsoft.Azure.Cosmos package, not abandoned Azure.Cosmos](#48-use-microsoft-azure-cosmos-package-not-abandoned-azure-cosmos)
+   - 4.9 [Configure SSL and connection mode for Cosmos DB Emulator](#49-configure-ssl-and-connection-mode-for-cosmos-db-emulator)
+   - 4.10 [Use ETags for optimistic concurrency on read-modify-write operations](#410-use-etags-for-optimistic-concurrency-on-read-modify-write-operations)
+   - 4.11 [Configure Excluded Regions for Dynamic Failover](#411-configure-excluded-regions-for-dynamic-failover)
+   - 4.12 [Unwrap CosmosItemResponse and enable content response in Java SDK](#412-unwrap-cosmositemresponse-and-enable-content-response-in-java-sdk)
+   - 4.13 [Use dependent @Bean methods for Cosmos DB initialization in Spring Boot](#413-use-dependent-bean-methods-for-cosmos-db-initialization-in-spring-boot)
+   - 4.14 [Spring Boot and Java version compatibility for Cosmos DB SDK](#414-spring-boot-and-java-version-compatibility-for-cosmos-db-sdk)
+   - 4.15 [Initialize Async Cosmos DB Container Before CosmosDBSaver](#415-initialize-async-cosmos-db-container-before-cosmosdbsaver)
+   - 4.16 [Use CosmosDBSaver for LangGraph Checkpointing](#416-use-cosmosdbsaver-for-langgraph-checkpointing)
+   - 4.17 [Use Persistent MCP Client Sessions for Multi-Agent Applications](#417-use-persistent-mcp-client-sessions-for-multi-agent-applications)
+   - 4.18 [Handle MCP ToolMessage Content Format Variations](#418-handle-mcp-toolmessage-content-format-variations)
+   - 4.19 [Filter MCP Tools by Name Prefix for Agent Assignment](#419-filter-mcp-tools-by-name-prefix-for-agent-assignment)
+   - 4.20 [Configure local development environment to avoid cloud connection conflicts](#420-configure-local-development-environment-to-avoid-cloud-connection-conflicts)
+   - 4.21 [Explicitly reference Newtonsoft.Json package](#421-explicitly-reference-newtonsoft-json-package)
+   - 4.22 [Use the Patch API for atomic counter increments](#422-use-the-patch-api-for-atomic-counter-increments)
+   - 4.23 [Configure Preferred Regions for Availability](#423-configure-preferred-regions-for-availability)
+   - 4.24 [Include aiohttp When Using Python Async SDK](#424-include-aiohttp-when-using-python-async-sdk)
+   - 4.25 [Never share a single CosmosItemRequestOptions instance across multiple createItem calls](#425-never-share-a-single-cosmositemrequestoptions-instance-across-multiple-createitem-calls)
+   - 4.26 [Handle 429 Errors with Retry-After](#426-handle-429-errors-with-retry-after)
+   - 4.27 [Use consistent enum serialization between Cosmos SDK and application layer](#427-use-consistent-enum-serialization-between-cosmos-sdk-and-application-layer)
+   - 4.28 [Reuse CosmosClient as Singleton](#428-reuse-cosmosclient-as-singleton)
+   - 4.29 [Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs](#429-annotate-entities-for-spring-data-cosmos-with-container-partitionkey-and-string-ids)
+   - 4.30 [Use CosmosRepository correctly and handle Iterable return types](#430-use-cosmosrepository-correctly-and-handle-iterable-return-types)
 5. [Indexing Strategies](#5-indexing-strategies) — **MEDIUM-HIGH**
    - 5.1 [Composite Index Directions Must Match ORDER BY](#51-composite-index-directions-must-match-order-by)
    - 5.2 [Use Composite Indexes for ORDER BY](#52-use-composite-indexes-for-order-by)
@@ -4196,7 +4197,46 @@ Key diagnostic fields:
 
 Reference: [Capture diagnostics](https://learn.microsoft.com/azure/cosmos-db/nosql/troubleshoot-dotnet-sdk)
 
-### 4.8 Configure SSL and connection mode for Cosmos DB Emulator
+### 4.8 Use Microsoft.Azure.Cosmos package, not abandoned Azure.Cosmos
+
+**Impact: HIGH** (Prevents build failures from referencing non-existent package versions)
+
+## Use Microsoft.Azure.Cosmos package, not abandoned Azure.Cosmos
+
+The canonical .NET SDK for Azure Cosmos DB is **`Microsoft.Azure.Cosmos`** (v3.x, currently GA). Never reference the **`Azure.Cosmos`** package — it was an abandoned v4-preview experiment that only shipped three preview versions (`4.0.0-preview` through `4.0.0-preview3`) and has no stable release. Referencing `Azure.Cosmos` with a 3.x version number will fail with **NU1103** because no such version exists.
+
+**Incorrect (wrong package id — causes build failure):**
+
+```xml
+<ItemGroup>
+  <!-- WRONG: Azure.Cosmos has no 3.x release. Only abandoned 4.0.0-preview exists. -->
+  <PackageReference Include="Azure.Cosmos" Version="3.47.2" />
+</ItemGroup>
+```
+
+```
+error NU1103: Unable to find a stable package Azure.Cosmos with version (>= 3.47.2)
+```
+
+**Correct (canonical GA package):**
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.47.0" />
+</ItemGroup>
+```
+
+**Key Points:**
+
+- **Always use `Microsoft.Azure.Cosmos`** — this is the only supported, GA Cosmos DB .NET SDK
+- **`Azure.Cosmos` is abandoned** — the v4 rewrite built on `Azure.Core` was never released as stable
+- **No 3.x versions of `Azure.Cosmos` exist** — only `4.0.0-preview`, `4.0.0-preview2`, and `4.0.0-preview3`
+- **Do not confuse package ids** — `Microsoft.Azure.Cosmos` 3.x is GA; `Azure.Cosmos` 4.x-preview is dead
+- **Applies to all .NET project types** — ASP.NET Core, Azure Functions, class libraries, console apps
+
+Reference: [Microsoft.Azure.Cosmos NuGet package](https://www.nuget.org/packages/Microsoft.Azure.Cosmos)
+
+### 4.9 Configure SSL and connection mode for Cosmos DB Emulator
 
 **Impact: MEDIUM** (enables local development with all SDKs)
 
@@ -4451,7 +4491,7 @@ azure_core = "0.32"
 
 Reference: [Use the Azure Cosmos DB Emulator for local development](https://learn.microsoft.com/azure/cosmos-db/emulator)
 
-### 4.9 Use ETags for optimistic concurrency on read-modify-write operations
+### 4.10 Use ETags for optimistic concurrency on read-modify-write operations
 
 **Impact: HIGH** (prevents lost updates in concurrent write scenarios)
 
@@ -4690,7 +4730,7 @@ public void updateProjectTaskCounts(String tenantId, String projectId) {
 
 Reference: [Optimistic concurrency control in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/database-transactions-optimistic-concurrency#optimistic-concurrency-control)
 
-### 4.10 Configure Excluded Regions for Dynamic Failover
+### 4.11 Configure Excluded Regions for Dynamic Failover
 
 **Impact: MEDIUM** (enables dynamic routing control without code changes)
 
@@ -4834,7 +4874,7 @@ var outageOptions = new ItemRequestOptions
 Reference: [Performance tips - .NET SDK Excluded Regions](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-dotnet-sdk-v3#excluded-regions)
 Reference: [Performance tips - Java SDK Excluded Regions](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-java-sdk-v4#excluded-regions)
 
-### 4.11 Unwrap CosmosItemResponse and enable content response in Java SDK
+### 4.12 Unwrap CosmosItemResponse and enable content response in Java SDK
 
 **Impact: MEDIUM** (prevents type errors from missing getItem() on reads and null content on writes)
 
@@ -5040,7 +5080,7 @@ Enabling content response does NOT increase RU cost - the document is already fe
 
 Reference: [Azure Cosmos DB Java SDK best practices](https://learn.microsoft.com/azure/cosmos-db/nosql/best-practice-java)
 
-### 4.12 Use dependent @Bean methods for Cosmos DB initialization in Spring Boot
+### 4.13 Use dependent @Bean methods for Cosmos DB initialization in Spring Boot
 
 **Impact: HIGH** (prevents circular dependency, startup failures, class name collisions, and compile errors)
 
@@ -5301,7 +5341,7 @@ References:
 - [`CosmosAsyncClient.createDatabaseIfNotExists()` Javadoc](https://learn.microsoft.com/java/api/com.azure.cosmos.cosmosasyncclient?view=azure-java-stable)
 - [`AbstractCosmosConfiguration` Javadoc](https://learn.microsoft.com/java/api/com.azure.spring.data.cosmos.config.abstractcosmosconfiguration?view=azure-java-stable)
 
-### 4.13 Spring Boot and Java version compatibility for Cosmos DB SDK
+### 4.14 Spring Boot and Java version compatibility for Cosmos DB SDK
 
 **Impact: CRITICAL** (Prevents build failures due to version incompatibility between Spring Boot and Java)
 
@@ -5432,7 +5472,7 @@ export PATH=$JAVA_HOME/bin:$PATH
 - [Spring Boot 2.7.x System Requirements](https://docs.spring.io/spring-boot/docs/2.7.x/reference/html/getting-started.html#getting-started-system-requirements)
 - [Azure Cosmos DB Java SDK](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/sdk-java-v4)
 
-### 4.14 Initialize Async Cosmos DB Container Before CosmosDBSaver
+### 4.15 Initialize Async Cosmos DB Container Before CosmosDBSaver
 
 **Impact: HIGH** (prevents credential and event-loop errors in async applications)
 
@@ -5494,7 +5534,7 @@ async def setup():
 
 Reference: [Azure Cosmos DB async Python SDK](https://learn.microsoft.com/python/api/azure-cosmos/azure.cosmos.aio?view=azure-python)
 
-### 4.15 Use CosmosDBSaver for LangGraph Checkpointing
+### 4.16 Use CosmosDBSaver for LangGraph Checkpointing
 
 **Impact: HIGH** (enables persistent multi-turn conversation state across restarts)
 
@@ -5556,7 +5596,7 @@ async def initialize_checkpointer():
 
 Reference: [langchain-azure-cosmosdb documentation](https://python.langchain.com/docs/integrations/providers/azure_cosmos_db/)
 
-### 4.16 Use Persistent MCP Client Sessions for Multi-Agent Applications
+### 4.17 Use Persistent MCP Client Sessions for Multi-Agent Applications
 
 **Impact: HIGH** (prevents session initialization overhead and connection churn)
 
@@ -5643,7 +5683,7 @@ async def cleanup_mcp():
 
 Reference: [langchain-mcp-adapters documentation](https://github.com/langchain-ai/langchain-mcp-adapters)
 
-### 4.17 Handle MCP ToolMessage Content Format Variations
+### 4.18 Handle MCP ToolMessage Content Format Variations
 
 **Impact: HIGH** (prevents JSON parse failures from langchain-mcp-adapters >= 0.2.0)
 
@@ -5693,7 +5733,7 @@ def extract_routing_info(message: ToolMessage):
 
 Reference: [langchain-mcp-adapters changelog](https://github.com/langchain-ai/langchain-mcp-adapters)
 
-### 4.18 Filter MCP Tools by Name Prefix for Agent Assignment
+### 4.19 Filter MCP Tools by Name Prefix for Agent Assignment
 
 **Impact: MEDIUM** (reduces agent confusion and improves routing accuracy)
 
@@ -5749,7 +5789,7 @@ transactions_agent = create_react_agent(model, transactions_tools, prompt=transa
 
 Reference: [LangGraph prebuilt agents](https://langchain-ai.github.io/langgraph/reference/prebuilt/)
 
-### 4.19 Configure local development environment to avoid cloud connection conflicts
+### 4.20 Configure local development environment to avoid cloud connection conflicts
 
 **Impact: MEDIUM** (prevents accidental connections to production instead of emulator)
 
@@ -5920,7 +5960,7 @@ azure:
 
 Reference: [Azure Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/emulator)
 
-### 4.20 Explicitly reference Newtonsoft.Json package
+### 4.21 Explicitly reference Newtonsoft.Json package
 
 **Impact: MEDIUM** (Prevents build failures and security vulnerabilities from missing or outdated Newtonsoft.Json dependency)
 
@@ -6022,7 +6062,7 @@ Solution:
 
 Reference: [Managing Newtonsoft.Json Dependencies](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-dotnet-sdk-v3?tabs=trace-net-core#managing-newtonsoftjson-dependencies)
 
-### 4.21 Use the Patch API for atomic counter increments
+### 4.22 Use the Patch API for atomic counter increments
 
 **Impact: HIGH** (eliminates read-modify-write for counters; reduces RU cost and eliminates concurrency conflicts)
 
@@ -6093,7 +6133,7 @@ return container.patchItem(videoId, new PartitionKey(videoId), ops, Video.class)
 
 Reference: [Partial document update (Patch API)](https://learn.microsoft.com/azure/cosmos-db/partial-document-update)
 
-### 4.22 Configure Preferred Regions for Availability
+### 4.23 Configure Preferred Regions for Availability
 
 **Impact: HIGH** (enables automatic failover, reduces latency)
 
@@ -6189,7 +6229,7 @@ Best practices:
 
 Reference: [Configure preferred regions](https://learn.microsoft.com/azure/cosmos-db/nosql/tutorial-global-distribution)
 
-### 4.23 Include aiohttp When Using Python Async SDK
+### 4.24 Include aiohttp When Using Python Async SDK
 
 **Impact: HIGH** (prevents application startup failure)
 
@@ -6237,7 +6277,7 @@ from azure.cosmos import CosmosClient
 
 Reference: [Azure Cosmos DB Python SDK](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/sdk-python)
 
-### 4.24 Never share a single CosmosItemRequestOptions instance across multiple createItem calls
+### 4.25 Never share a single CosmosItemRequestOptions instance across multiple createItem calls
 
 **Impact: HIGH** (causes wrong partition key to be sent, producing silent data corruption or 400/404 errors)
 
@@ -6296,7 +6336,7 @@ usersContainer.createItem(
 
 Reference: [Java SDK createItem](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-java-get-started)
 
-### 4.25 Handle 429 Errors with Retry-After
+### 4.26 Handle 429 Errors with Retry-After
 
 **Impact: HIGH** (prevents cascading failures)
 
@@ -6413,7 +6453,7 @@ await Task.WhenAll(tasks);
 
 Reference: [Handle rate limiting](https://learn.microsoft.com/azure/cosmos-db/nosql/troubleshoot-request-rate-too-large)
 
-### 4.26 Use consistent enum serialization between Cosmos SDK and application layer
+### 4.27 Use consistent enum serialization between Cosmos SDK and application layer
 
 **Impact: critical** (undefined)
 
@@ -6510,7 +6550,7 @@ public class Order
 - Point reads work but filtered queries don't
 - API returns different enum format than stored in Cosmos DB
 
-### 4.27 Reuse CosmosClient as Singleton
+### 4.28 Reuse CosmosClient as Singleton
 
 **Impact: CRITICAL** (prevents connection exhaustion)
 
@@ -6673,7 +6713,7 @@ async fn list_orders(
 
 Reference: [CosmosClient best practices](https://learn.microsoft.com/azure/cosmos-db/nosql/best-practice-dotnet)
 
-### 4.28 Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs
+### 4.29 Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs
 
 **Impact: CRITICAL** (prevents startup failures and data access errors in Spring Data Cosmos applications)
 
@@ -6789,7 +6829,7 @@ Add `@JsonIgnoreProperties(ignoreUnknown = true)` to every Cosmos entity class s
 
 Reference: [Spring Data Azure Cosmos DB annotations](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-java-spring-data)
 
-### 4.29 Use CosmosRepository correctly and handle Iterable return types
+### 4.30 Use CosmosRepository correctly and handle Iterable return types
 
 **Impact: HIGH** (prevents ClassCastException and query failures in Spring Data Cosmos repositories)
 
