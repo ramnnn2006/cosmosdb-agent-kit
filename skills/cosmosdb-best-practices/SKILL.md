@@ -119,6 +119,7 @@ Reference these guidelines when:
 - [sdk-langchain-mcp-persistent-session](rules/sdk-langchain-mcp-persistent-session.md) - Maintain persistent MCP client sessions for application lifetime
 - [sdk-langchain-mcp-tool-content-format](rules/sdk-langchain-mcp-tool-content-format.md) - Handle both string and list formats in MCP ToolMessage content
 - [sdk-langgraph-mcp-tool-filtering](rules/sdk-langgraph-mcp-tool-filtering.md) - Filter MCP tools by name prefix for per-agent assignment
+- [sdk-dotnet-namespace-collision](rules/sdk-dotnet-namespace-collision.md) - Avoid `Microsoft.Azure.Cosmos` namespace collisions with domain models (User, Database, Container, etc.)
 
 ### 5. Indexing Strategies (MEDIUM-HIGH)
 
