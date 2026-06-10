@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/AzureCosmosDB/cosmosdb-agent-kit/discussions
+    about: Ask questions or start a discussion about the agent kit
+  - name: Azure Cosmos DB Documentation
+    url: https://learn.microsoft.com/azure/cosmos-db/
+    about: Official Azure Cosmos DB documentation
