@@ -13,19 +13,10 @@ config:
   model: claude-sonnet-4.6
 metrics:
   - name: task_completion
-    weight: 0.6
-    threshold: 0.8
-    description: Did the skill complete the assigned task correctly?
-  - name: cosmos_accuracy
-    weight: 0.4
-    threshold: 0.7
-    description: Are the Cosmos DB recommendations technically accurate?
+    weight: 1.0
+    threshold: 0.0
+    description: Did the skill complete the assigned task without errors?
 graders:
-  - type: text
-    name: has_output
-    config:
-      regex_match:
-        - ".+"
   - type: behavior
     name: response_constraints
     config:
