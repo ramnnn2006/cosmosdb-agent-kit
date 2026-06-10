@@ -5,6 +5,13 @@ description: |
   partitioning, queries, and SDK usage. Use when writing, reviewing, or refactoring
   code that interacts with Azure Cosmos DB, designing data models, optimizing queries,
   or implementing high-performance database operations.
+  USE FOR: Cosmos DB NoSQL, partition key design, RU optimization, point reads,
+  cross-partition queries, SDK singleton, CosmosClient, container modeling,
+  change feed, bulk operations, vector search, full-text search, hierarchical
+  partition keys, global distribution, autoscale throughput, indexing policy.
+  DO NOT USE FOR: PostgreSQL, MySQL, MongoDB (non-Azure), DynamoDB, Cassandra,
+  Azure SQL, Cosmos DB for PostgreSQL (vCore), Cosmos DB for MongoDB vCore, Azure DocumentDB,
+  general SQL databases, Redis, Elasticsearch.
 
 license: MIT
 metadata:

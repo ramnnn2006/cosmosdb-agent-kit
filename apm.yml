@@ -1,0 +1,19 @@
+name: cosmosdb-agent-kit
+version: 1.0.0
+description: >-
+  Azure Cosmos DB best practices and performance optimization skills for AI coding agents.
+  Provides expert guidance on data modeling, partition key design, query optimization,
+  SDK usage, indexing, throughput, global distribution, vector search, and full-text search.
+
+marketplace:
+  owner:
+    name: Microsoft
+    url: https://github.com/AzureCosmosDB
+  packages:
+    - name: cosmosdb
+      description: >-
+        Azure Cosmos DB best practices for data modeling, partitioning, queries,
+        SDK patterns, indexing, throughput, and global distribution. Teaches your
+        agent how to build high-performance Cosmos DB applications.
+      source: ./.github/plugins/cosmosdb-agent-kit
+      homepage: https://github.com/AzureCosmosDB/cosmosdb-agent-kit
