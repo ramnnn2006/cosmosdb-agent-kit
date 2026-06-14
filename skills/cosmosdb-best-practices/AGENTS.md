@@ -1322,8 +1322,6 @@ Reference: [Schema evolution in Cosmos DB](https://learn.microsoft.com/azure/cos
 
 **Impact: MEDIUM** (expired data is removed automatically in the background instead of through costly cleanup jobs)
 
-## Use TTL for Automatic Data Expiration
-
 Cosmos DB can delete expired items for you. Enable Time-to-Live on the container and items past their expiry are removed by a background process that uses leftover request units, so you pay nothing extra in RUs and write no cleanup code. Scheduled cleanup jobs that query for old items and delete them one by one burn RUs on every run and compete with your live traffic.
 
 The most flexible setup is a container default of `-1` (items never expire on their own) combined with a per-item `ttl` property in seconds. Items that set `ttl` expire on their own schedule, items that omit it stick around forever. You can also set a positive container default so everything expires unless an item overrides it.
