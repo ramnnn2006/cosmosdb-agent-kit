@@ -7,8 +7,6 @@ tags: pattern, stored-procedures, transactional-batch, atomicity, single-partiti
 
 ## Use Stored Procedures Only for Multi-Document Atomic Operations Within a Single Partition
 
-**Impact: MEDIUM (avoids server-side JavaScript that is slow to execute, hard to debug, and capped at 5 seconds)**
-
 Stored procedures run JavaScript inside the database engine and are scoped to a single logical partition. Their one real strength is transactional execution: all operations in a stored procedure either commit together or roll back together. They are not a general server-side compute layer, and using them that way produces logic that is hard to test, hard to debug, and subject to strict execution limits.
 
 Reach for a stored procedure only when you need ACID guarantees across multiple items in the same partition and transactional batch cannot express the operation, for example when a write depends on data read inside the transaction, or when you exceed the batch limits of 100 operations or 2 MB per request.
